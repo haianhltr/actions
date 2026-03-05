@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: actions-api
+  namespace: actions
+  labels:
+    app: actions-api
+    service: actions-api
+    team: team6
+    env: production
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: actions-api
+  template:
+    metadata:
+      labels:
+        app: actions-api
+        service: actions-api
+        team: team6
+        env: production
+    spec:
+      serviceAccountName: actions-sa
+      containers:
+        - name: actions-api
+          image: ghcr.io/haianhltr/actions/actions-api:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: actions-postgres-secret
+                  key: DATABASE_URL
+            - name: SSOT_API_URL
+              value: "http://ssot-api.ssot:8080"
+            - name: K8S_IN_CLUSTER
+              value: "true"
+            - name: MAX_SCALE_REPLICAS
+              value: "10"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi

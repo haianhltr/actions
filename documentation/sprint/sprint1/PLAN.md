@@ -159,22 +159,28 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
 
 **`apps/actions-api/k8s_client.py`:**
 - Uses `kubernetes` Python client (in-cluster config)
+- **IMPORTANT:** The `kubernetes` Python client is **synchronous**. FastAPI is async. All K8s API calls **MUST** be wrapped in `asyncio.to_thread()` to avoid blocking the event loop.
+
 - `class K8sClient`:
   - `async def restart_deployment(name: str, namespace: str) -> str`
     - Patch deployment with restart annotation:
       ```python
+      import asyncio
+      from datetime import datetime, timezone
+
       body = {
           "spec": {
               "template": {
                   "metadata": {
                       "annotations": {
-                          "kubectl.kubernetes.io/restartedAt": datetime.utcnow().isoformat()
+                          "kubectl.kubernetes.io/restartedAt": datetime.now(timezone.utc).isoformat()
                       }
                   }
               }
           }
       }
-      apps_v1.patch_namespaced_deployment(name, namespace, body)
+      # MUST wrap sync call in to_thread
+      await asyncio.to_thread(self.apps_v1.patch_namespaced_deployment, name, namespace, body)
       ```
     - Returns success message
   - `async def scale_deployment(name: str, namespace: str, replicas: int) -> str`
@@ -182,12 +188,16 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
     - Patch deployment scale:
       ```python
       body = {"spec": {"replicas": replicas}}
-      apps_v1.patch_namespaced_deployment_scale(name, namespace, body)
+      # MUST wrap sync call in to_thread
+      await asyncio.to_thread(self.apps_v1.patch_namespaced_deployment_scale, name, namespace, body)
       ```
     - Returns success message with old → new replica count
   - `async def get_deployment_status(name: str, namespace: str) -> dict`
     - Read deployment status (replicas, available, conditions)
+    - `await asyncio.to_thread(self.apps_v1.read_namespaced_deployment, name, namespace)`
     - For validating action targets exist
+
+- Wrap **every** `kubernetes` client call in `asyncio.to_thread()`. This applies to `patch_namespaced_deployment`, `patch_namespaced_deployment_scale`, `read_namespaced_deployment`, and any future calls.
 
 - Error handling:
   - K8s API errors → catch and return meaningful error message
@@ -228,12 +238,14 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
 - `class RBACEnforcer`:
   - `async def check_permission(user: str, entity_id: str, action_type: str) -> tuple[bool, str]`
     1. Get ownership from SSOT: `ssot_client.get_ownership(entity_id)`
-    2. If no ownership record → allow (no restriction) with warning log
+    2. **If no ownership record → DENY (fail-closed).** Return `(False, "No ownership record for entity {entity_id} — denied")`. Per `RBAC_POLICY.md`: unknown entities must not be modifiable.
     3. If user is in `platform-admin` list → allow
     4. If entity owner_team matches user's team → allow
     5. Else → deny with reason "User {user} team does not own entity {entity_id}"
   - Team membership: for MVP, extract team from request header `X-User-Team` or from a simple config file
   - Future: OIDC integration, proper identity
+
+  **CRITICAL:** Do NOT default-allow when ownership is missing. The contract (`RBAC_POLICY.md`) requires fail-closed behavior.
 
 - Log all RBAC decisions (allow/deny) with entity_id, user, action_type
 - Instrument: `actions_rbac_denied_total` counter
@@ -254,8 +266,13 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
 @app.post("/actions", response_model=ActionResponse, status_code=200)
 async def execute_action(body: ActionRequest, db: AsyncSession = Depends(get_db)):
     # 1. Validate entity exists in SSOT
-    # 2. Check RBAC permission
-    # 3. Parse entity_id to extract namespace + name
+    # 2. Check RBAC permission (fail-closed — deny if no ownership)
+    # 3. Parse entity_id to extract namespace + kind + name:
+    #    Entity ID format: k8s:{cluster}:{namespace}:{kind}:{name}
+    #    Example: "k8s:lab:calculator:Deployment:api"
+    #    parts = entity_id.split(":")  → index 2=namespace, 3=kind, 4=name
+    #    Only Deployment targets are actionable in MVP.
+    #    If kind != "Deployment" → return 400 "Only Deployment targets supported"
     # 4. Execute action via K8s client:
     #    - restart_deployment → k8s_client.restart_deployment(name, ns)
     #    - scale_deployment → k8s_client.scale_deployment(name, ns, replicas)
