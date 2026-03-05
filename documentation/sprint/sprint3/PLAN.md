@@ -2,7 +2,7 @@
 
 **Goal:** Build a minimal Ops UI that displays entity health state from SSOT, surfaces action recommendations from the Actions API, and provides one-click remediation buttons with confirmation dialogs.
 
-**Status:** Not Started
+**Status:** Complete
 **Depends on:** Sprint 1 complete, Sprint 2 complete (for recommendations), Team 4 SSOT API (health_summary + ownership) — ALREADY LIVE
 
 ---
@@ -39,7 +39,7 @@
 
 ### Milestone 1 — Create Ops UI project structure + Nginx config
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 Directory structure:
 ```
@@ -115,7 +115,7 @@ const CONFIG = {
 
 ### Milestone 2 — API client module
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`apps/ops-ui/js/api.js`:**
 ```javascript
@@ -201,7 +201,7 @@ const API = {
 
 ### Milestone 3 — Health Overview page (index.html)
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`apps/ops-ui/index.html`:**
 
@@ -280,7 +280,7 @@ Features:
 
 ### Milestone 4 — Entity Detail page (entity.html)
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`apps/ops-ui/entity.html`:**
 
@@ -409,7 +409,7 @@ Features:
 
 ### Milestone 5 — Styles + Application logic
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`apps/ops-ui/css/styles.css`:**
 ```css
@@ -794,7 +794,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 ### Milestone 6 — Kubernetes deployment manifests
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`k8s/ops-ui/deployment.yaml`:**
 ```yaml
@@ -877,7 +877,7 @@ spec:
 
 ### Milestone 7 — Build, deploy, and smoke test
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 ```bash
 # 1. Build Ops UI image
@@ -929,7 +929,7 @@ curl -s -o /dev/null -w "%{http_code}" http://192.168.1.210:31080/entity.html
 
 ### Milestone 8 — Write E2E tests
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`tests/e2e/test_ops_ui.py`:**
 ```python
@@ -999,7 +999,7 @@ pytest tests/e2e/test_ops_ui.py -v
 
 ### Milestone 9 — Update docs + write sprint review
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 - Update `documentation/sprint/ROADMAP.md` — mark Sprint 3 as complete
 - Write `documentation/sprint/sprint3/REVIEW.md`

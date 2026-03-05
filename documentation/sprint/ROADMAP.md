@@ -9,7 +9,7 @@
 
 ## Current State
 
-Sprint 2 complete. Actions API v0.2.0 running at `:31000` with Kafka consumer, recommendations, and correlation.
+Sprint 3 complete. Ops UI v0.1.0 running at `:31080` with health overview, entity detail, action buttons, and Nginx reverse proxy.
 
 ---
 
@@ -32,7 +32,7 @@ Sprint 2  ✅ Kafka Consumer + Recommendations
     │         Correlation: link actions to triggering events
     │
     ▼
-Sprint 3     Ops UI (Health Overview + Actions)
+Sprint 3  ✅ Ops UI (Health Overview + Actions)
     │         Health overview page (entities, state, owner)
     │         Entity detail page (health, root cause, actions)
     │         Action buttons with confirmation dialog
