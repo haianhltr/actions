@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ops-ui
+  namespace: actions
+  labels:
+    app: ops-ui
+    service: ops-ui
+    team: team6
+    env: production
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ops-ui
+  template:
+    metadata:
+      labels:
+        app: ops-ui
+        service: ops-ui
+        team: team6
+        env: production
+    spec:
+      containers:
+        - name: ops-ui
+          image: ghcr.io/haianhltr/actions/ops-ui:latest
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi

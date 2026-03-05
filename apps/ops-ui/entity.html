@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Entity Detail</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <header>
+        <a href="index.html" class="back-link">&larr; Back to Overview</a>
+        <h1 id="entity-title">Entity Detail</h1>
+    </header>
+
+    <!-- Entity Metadata -->
+    <section id="entity-info" class="card">
+        <h2>Entity</h2>
+        <dl id="entity-metadata"><!-- name, type, namespace, cluster --></dl>
+    </section>
+
+    <!-- Health State -->
+    <section id="health-info" class="card">
+        <h2>Health State</h2>
+        <div id="health-state-display"><!-- state badge + reason + confidence --></div>
+    </section>
+
+    <!-- Root Cause -->
+    <section id="root-cause" class="card">
+        <h2>Root Cause</h2>
+        <div id="root-cause-display">
+            <!-- root_cause_entity_id link, or "Self" if same as entity -->
+        </div>
+    </section>
+
+    <!-- Recommendation (if any) -->
+    <section id="recommendation" class="card hidden">
+        <h2>Recommended Action</h2>
+        <div id="recommendation-display">
+            <!-- recommended_action + reason from health.transition event -->
+        </div>
+    </section>
+
+    <!-- Action Buttons -->
+    <section id="actions" class="card">
+        <h2>Actions</h2>
+        <div class="action-buttons">
+            <button onclick="confirmAction('restart_deployment')" class="btn btn-warning">
+                Restart Deployment
+            </button>
+            <div class="scale-controls">
+                <label for="scale-replicas">Replicas:</label>
+                <input type="number" id="scale-replicas" min="0" max="10" value="1">
+                <button onclick="confirmAction('scale_deployment')" class="btn btn-warning">
+                    Scale Deployment
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Action History -->
+    <section id="action-history" class="card">
+        <h2>Action History</h2>
+        <table id="history-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Action</th>
+                    <th>User</th>
+                    <th>Status</th>
+                    <th>Result</th>
+                </tr>
+            </thead>
+            <tbody id="history-body"><!-- Populated by JS --></tbody>
+        </table>
+    </section>
+
+    <!-- Confirmation Dialog (Modal) -->
+    <div id="confirm-dialog" class="modal hidden">
+        <div class="modal-overlay" onclick="cancelAction()"></div>
+        <div class="modal-content">
+            <h3 id="confirm-title">Confirm Action</h3>
+            <p id="confirm-message"></p>
+            <div class="form-group">
+                <label for="confirm-reason">Reason (optional):</label>
+                <input type="text" id="confirm-reason"
+                       placeholder="Why are you performing this action?">
+            </div>
+            <div class="form-group">
+                <label for="confirm-user">Your email:</label>
+                <input type="text" id="confirm-user" value="engineer@team.com">
+            </div>
+            <div class="modal-buttons">
+                <button onclick="cancelAction()" class="btn btn-cancel">Cancel</button>
+                <button onclick="executeConfirmedAction()" class="btn btn-confirm">Confirm</button>
+            </div>
+            <div id="action-result" class="hidden"></div>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
