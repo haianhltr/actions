@@ -1,0 +1,27 @@
+# Auto-remediation rules (Phase 2 — Sprint 4)
+# These are NOT active until Sprint 4 implementation
+auto_actions:
+  - name: restart_on_crashloop
+    trigger:
+      new_state: UNHEALTHY
+      reason_contains: "CrashLoopBackOff"
+      entity_type: Deployment
+    action:
+      type: restart_deployment
+      max_per_hour: 2
+      cooldown_minutes: 30
+    enabled: false
+
+  - name: scale_on_lag
+    trigger:
+      new_state: DEGRADED
+      reason_contains: "Consumer lag"
+      entity_type: Deployment
+    action:
+      type: scale_deployment
+      parameters:
+        replicas_add: 1
+        max_replicas: 5
+      max_per_hour: 3
+      cooldown_minutes: 15
+    enabled: false

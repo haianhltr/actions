@@ -1,0 +1,15 @@
+[project]
+name = "actions-tests"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+timeout = 60
+markers = [
+    "sprint1: Sprint 1 — Actions Service Core + Audit DB (restart, scale, RBAC, audit)",
+    "sprint2: Sprint 2 — Kafka Consumer + Recommendations",
+    "sprint3: Sprint 3 — Ops UI (health overview, entity detail, action buttons)",
+    "sprint4: Sprint 4 — RBAC + Guardrails + Auto-Remediation",
+    "sprint5: Sprint 5 — Integration + Failure Validation",
+]

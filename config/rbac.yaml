@@ -1,0 +1,28 @@
+roles:
+  platform-admin:
+    can_act_on: all
+    description: "Can act on any entity in any namespace"
+
+  team-member:
+    can_act_on: owned_entities
+    description: "Can act on entities owned by their team"
+
+team_mappings:
+  app-team:
+    members:
+      - "engineer@team.com"
+    owns:
+      - "k8s:lab:calculator:*"
+
+  platform-team:
+    members:
+      - "sre@team.com"
+    role: platform-admin
+
+tier_restrictions:
+  tier-1:
+    requires_approval: true
+  tier-2:
+    requires_approval: false
+  tier-3:
+    requires_approval: false
