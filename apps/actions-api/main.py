@@ -5,14 +5,16 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import Depends, FastAPI, HTTPException, Header, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from prometheus_client import Counter, Histogram, generate_latest
 from pythonjsonlogger import jsonlogger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from auto_remediation import AutoRemediationEngine
 from database import engine, get_db
+from guardrails import Guardrails
 from k8s_client import K8sClient
 from kafka_consumer import HealthTransitionConsumer
 from models import Action, Base, Recommendation
@@ -43,18 +45,29 @@ API_REQUEST_DURATION = Histogram(
 
 # --- Globals ---
 k8s_client: K8sClient | None = None
-rbac = RBACEnforcer()
-health_consumer = HealthTransitionConsumer()
+rbac: RBACEnforcer | None = None
+health_consumer: HealthTransitionConsumer | None = None
 _start_time = time.time()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global k8s_client
+    global k8s_client, rbac
     # Create tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables created")
+
+    # Initialize RBAC from config
+    try:
+        rbac = RBACEnforcer("/app/config/rbac.yaml")
+    except Exception:
+        logger.exception("Failed to load RBAC config — using fail-closed default")
+        rbac = RBACEnforcer.__new__(RBACEnforcer)
+        rbac.config = {}
+        rbac.team_mappings = {}
+        rbac.roles = {}
+        rbac.tier_restrictions = {}
 
     # Initialize K8s client
     try:
@@ -63,7 +76,20 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Failed to initialize K8s client — actions will fail")
 
-    # Start Kafka consumer
+    # Initialize auto-remediation engine + guardrails
+    auto_remediation_engine = None
+    guardrails_instance = Guardrails(max_escalation_failures=3)
+    try:
+        auto_remediation_engine = AutoRemediationEngine("/app/config/auto-remediation.yaml")
+    except Exception:
+        logger.exception("Failed to load auto-remediation config — continuing without it")
+
+    # Start Kafka consumer with auto-remediation
+    health_consumer = HealthTransitionConsumer(
+        auto_remediation=auto_remediation_engine,
+        guardrails=guardrails_instance,
+        k8s_client=k8s_client,
+    )
     consumer_task = None
     try:
         await health_consumer.start()
@@ -80,7 +106,7 @@ async def lifespan(app: FastAPI):
         consumer_task.cancel()
 
 
-app = FastAPI(title="Actions API", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="Actions API", version="0.4.0", lifespan=lifespan)
 
 
 # --- Middleware: metrics ---
@@ -109,7 +135,7 @@ async def root(db: AsyncSession = Depends(get_db)):
     count = len(result.scalars().all())
     return {
         "service": "actions-api",
-        "version": "0.2.0",
+        "version": "0.4.0",
         "status": "running",
         "uptime_seconds": round(time.time() - _start_time, 1),
         "action_count": count,
@@ -129,7 +155,6 @@ async def metrics():
 @app.post("/actions", response_model=ActionResponse)
 async def execute_action(
     body: ActionRequest,
-    x_user_team: str | None = Header(None),
     db: AsyncSession = Depends(get_db),
 ):
     # 1. Validate entity exists in SSOT
@@ -137,12 +162,16 @@ async def execute_action(
     if entity is None:
         raise HTTPException(status_code=404, detail=f"Entity {body.entity_id} not found in SSOT")
 
-    # 2. RBAC check (fail-closed)
+    # 2. RBAC check (fail-closed, config-driven)
     allowed, rbac_reason = await rbac.check_permission(
-        user=body.user, user_team=x_user_team, entity_id=body.entity_id, action_type=body.action_type
+        user=body.user, entity_id=body.entity_id,
+        action_type=body.action_type, ssot_client=ssot_client,
     )
     if not allowed:
         raise HTTPException(status_code=403, detail=rbac_reason)
+
+    # Resolve user's team from RBAC config for audit
+    user_team = rbac.get_user_team(body.user)
 
     # 3. Parse entity_id: k8s:{cluster}:{namespace}:{kind}:{name}
     parts = body.entity_id.split(":")
@@ -187,6 +216,12 @@ async def execute_action(
                 )
             result_message = await k8s_client.scale_deployment(name, namespace, int(replicas))
             status = "success"
+        elif body.action_type == "pause_rollout":
+            result_message = await k8s_client.pause_rollout(name, namespace)
+            status = "success"
+        elif body.action_type == "resume_rollout":
+            result_message = await k8s_client.resume_rollout(name, namespace)
+            status = "success"
         else:
             raise HTTPException(status_code=400, detail=f"Unknown action_type: {body.action_type}")
 
@@ -211,7 +246,7 @@ async def execute_action(
         namespace=namespace,
         action_type=body.action_type,
         user_id=body.user,
-        user_team=x_user_team,
+        user_team=user_team,
         parameters=body.parameters,
         reason=body.reason,
         status=status,

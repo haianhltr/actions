@@ -71,6 +71,34 @@ class K8sClient:
         except ApiException as e:
             raise RuntimeError(f"K8s API error scaling {name}: {e.reason}")
 
+    async def pause_rollout(self, name: str, namespace: str) -> str:
+        """Pause deployment rollout progression."""
+        body = {"spec": {"paused": True}}
+        try:
+            await asyncio.to_thread(
+                self.apps_v1.patch_namespaced_deployment, name, namespace, body
+            )
+            logger.info("Paused rollout for deployment %s in namespace %s", name, namespace)
+            return f"Rollout paused for deployment {name} in namespace {namespace}"
+        except ApiException as e:
+            if e.status == 404:
+                raise ValueError(f"Deployment {name} not found in namespace {namespace}")
+            raise RuntimeError(f"K8s API error pausing {name}: {e.reason}")
+
+    async def resume_rollout(self, name: str, namespace: str) -> str:
+        """Resume a paused deployment rollout."""
+        body = {"spec": {"paused": False}}
+        try:
+            await asyncio.to_thread(
+                self.apps_v1.patch_namespaced_deployment, name, namespace, body
+            )
+            logger.info("Resumed rollout for deployment %s in namespace %s", name, namespace)
+            return f"Rollout resumed for deployment {name} in namespace {namespace}"
+        except ApiException as e:
+            if e.status == 404:
+                raise ValueError(f"Deployment {name} not found in namespace {namespace}")
+            raise RuntimeError(f"K8s API error resuming {name}: {e.reason}")
+
     async def get_deployment_status(self, name: str, namespace: str) -> dict:
         try:
             deployment = await asyncio.to_thread(

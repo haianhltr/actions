@@ -45,6 +45,10 @@ spec:
               value: "health.transition.v1"
             - name: KAFKA_CONSUMER_GROUP
               value: "actions-consumer-group"
+          volumeMounts:
+            - name: actions-config
+              mountPath: /app/config
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /health
@@ -64,3 +68,7 @@ spec:
             limits:
               cpu: 100m
               memory: 128Mi
+      volumes:
+        - name: actions-config
+          configMap:
+            name: actions-config
