@@ -15,7 +15,7 @@
   - `GET /recommendations` — pending recommendations from Kafka events
   - Kafka consumer processing `health.transition.v1` events
   - Correlation: actions linked to triggering events
-  - **RBAC stub**: checks SSOT ownership but does NOT load from `config/rbac.yaml`, does NOT fail-closed
+  - **RBAC stub**: checks SSOT ownership (fail-closed — denies if no ownership record), but does NOT load team mappings from `config/rbac.yaml`, does NOT check team membership from config
 - Ops UI running at `http://192.168.1.210:31080` with health overview + entity detail + action buttons
 - Config files exist but are NOT loaded by the application:
   - `config/rbac.yaml` — team mappings, roles, tier restrictions
@@ -48,19 +48,20 @@
 
 **Status:** [ ] Not Started
 
-Replace the Sprint 1 RBAC stub with a full enforcer that loads team mappings and roles from `config/rbac.yaml`.
+Replace the Sprint 1 RBAC stub with a full config-driven enforcer that loads team mappings and roles from `config/rbac.yaml`.
 
-**Critical correction from Sprint 1:** The stub allowed actions when no ownership record existed ("fail-open"). This sprint changes to **fail-closed** — no ownership record = deny (403).
+**Note:** Sprint 1 already implements fail-closed behavior (no ownership = deny). This sprint's job is to **refactor from hardcoded SSOT ownership check to config-driven team membership** — reading team→member mappings, roles, and tier restrictions from `config/rbac.yaml` via ConfigMap.
 
 **`apps/actions-api/rbac.py`** — full rewrite:
 ```python
 import yaml
 import logging
+from prometheus_client import Counter
 
 logger = logging.getLogger(__name__)
 
-# Prometheus metric (defined in metrics module)
-# RBAC_DENIED = Counter("actions_rbac_denied_total", "RBAC denials")
+# Prometheus metric
+RBAC_DENIED = Counter("actions_rbac_denied_total", "RBAC denials")
 
 
 class RBACEnforcer:
@@ -126,7 +127,7 @@ class RBACEnforcer:
         user_team = self.get_user_team(user)
         if not user_team:
             logger.warning("RBAC DENY: user=%s not found in any team", user)
-            # RBAC_DENIED.inc()
+            RBAC_DENIED.inc()
             return False, f"User {user} not found in RBAC config"
 
         # 3. Get entity ownership from SSOT
@@ -138,7 +139,7 @@ class RBACEnforcer:
                 "RBAC DENY: no ownership record for entity=%s (fail-closed)",
                 entity_id,
             )
-            # RBAC_DENIED.inc()
+            RBAC_DENIED.inc()
             return False, (
                 f"No ownership record for entity {entity_id} — "
                 f"access denied (fail-closed)"
@@ -152,7 +153,7 @@ class RBACEnforcer:
                 "RBAC DENY: user=%s team=%s, entity owner=%s",
                 user, user_team, owner_team,
             )
-            # RBAC_DENIED.inc()
+            RBAC_DENIED.inc()
             return False, (
                 f"User {user} (team={user_team}) does not own "
                 f"entity {entity_id} (owner={owner_team})"
@@ -305,17 +306,18 @@ ssh 5560 "sudo kubectl exec deploy/actions-api -n actions -- cat /app/config/aut
 ```python
 import yaml
 import logging
+from prometheus_client import Counter
 
 logger = logging.getLogger(__name__)
 
-# Prometheus metrics (defined in metrics module)
-# AUTO_REMEDIATION_TOTAL = Counter(
-#     "actions_auto_remediation_total", "Auto-remediation actions",
-#     ["action_name", "status"],
-# )
-# AUTO_REMEDIATION_BLOCKED = Counter(
-#     "actions_auto_remediation_blocked_total", "Auto-remediation blocked by guardrails",
-# )
+# Prometheus metrics
+AUTO_REMEDIATION_TOTAL = Counter(
+    "actions_auto_remediation_total", "Auto-remediation actions",
+    ["action_name", "status"],
+)
+AUTO_REMEDIATION_BLOCKED = Counter(
+    "actions_auto_remediation_blocked_total", "Auto-remediation blocked by guardrails",
+)
 
 
 class AutoRemediationEngine:
@@ -403,7 +405,7 @@ class AutoRemediationEngine:
                 "Auto-remediation BLOCKED by guardrails: rule=%s, entity=%s — %s",
                 rule_name, target_id, reason,
             )
-            # AUTO_REMEDIATION_BLOCKED.inc()
+            AUTO_REMEDIATION_BLOCKED.inc()
             return
 
         # Build action parameters
@@ -426,7 +428,7 @@ class AutoRemediationEngine:
             correlation_id=event.get("event_id"),
         )
 
-        # AUTO_REMEDIATION_TOTAL.labels(action_name=rule_name, status="executed").inc()
+        AUTO_REMEDIATION_TOTAL.labels(action_name=rule_name, status="executed").inc()
 ```
 
 **Files to create:**
@@ -565,11 +567,11 @@ Modify the Kafka consumer to check auto-remediation rules after storing a recomm
 **`apps/actions-api/kafka_consumer.py`** — add auto-remediation hook:
 ```python
 class HealthTransitionConsumer:
-    def __init__(self, auto_remediation=None, guardrails=None, action_executor=None):
+    def __init__(self, auto_remediation=None, guardrails=None, k8s_client=None):
         # ... existing init ...
         self.auto_remediation = auto_remediation  # AutoRemediationEngine instance
         self.guardrails = guardrails              # Guardrails instance
-        self._action_executor = action_executor   # Callable to execute actions
+        self.k8s_client = k8s_client              # K8sClient instance for auto-remediation
 
     async def _process_event(self, event: dict):
         # ... existing recommendation storage logic (from Sprint 2) ...
@@ -681,13 +683,16 @@ class HealthTransitionConsumer:
 ```python
 from auto_remediation import AutoRemediationEngine
 from guardrails import Guardrails
+from k8s_client import K8sClient
 
+k8s = K8sClient()  # Reuse existing instance or create new
 auto_remediation_engine = AutoRemediationEngine("/app/config/auto-remediation.yaml")
-guardrails = Guardrails(max_escalation_failures=3)
+guardrails_instance = Guardrails(max_escalation_failures=3)
 
 health_consumer = HealthTransitionConsumer(
     auto_remediation=auto_remediation_engine,
-    guardrails=guardrails,
+    guardrails=guardrails_instance,
+    k8s_client=k8s,
 )
 ```
 
@@ -759,6 +764,15 @@ elif body.action_type == "resume_rollout":
 ```
 
 **Decision:** Include `rollback_deployment` and `pause_rollout`/`resume_rollout` if the `kubectl rollout undo` subprocess approach works cleanly in the k3s environment. If the service account lacks permissions or the subprocess approach is unreliable, defer to a later sprint.
+
+**Dockerfile requirement for rollback:** If implementing `rollback_deployment` via subprocess, add kubectl to the Docker image:
+```dockerfile
+# Add to apps/actions-api/Dockerfile
+RUN apk add --no-cache curl && \
+    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
+    chmod +x kubectl && mv kubectl /usr/local/bin/
+```
+Alternatively, skip `rollback_deployment` entirely (it's optional/Phase 2) and only implement `pause_rollout`/`resume_rollout` which use the Python client's `patch_namespaced_deployment` (no kubectl needed).
 
 **K8s RBAC note:** The existing ClusterRole already has `replicasets: [get, list]` for rollback history. No additional K8s RBAC changes needed — `deployments: [patch]` covers rollback and pause.
 

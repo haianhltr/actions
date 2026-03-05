@@ -136,13 +136,40 @@ def wait_for_recommendation(entity_id: str, timeout: int = 180):
 
 
 def execute_kubectl(command: str) -> str:
-    """Execute kubectl command on the k3s cluster via SSH."""
+    """
+    Execute kubectl command on the k3s cluster via SSH.
+
+    NOTE: Requires SSH access to k3s node (ssh alias '5560').
+    This only works from the dev machine, NOT in CI runners.
+    E2E tests that use this function must be run locally.
+    """
     import subprocess
     result = subprocess.run(
         ["ssh", "5560", f"sudo kubectl {command}"],
         capture_output=True, text=True, timeout=30,
     )
     return result.stdout.strip()
+
+
+def wait_for_auto_action(entity_id: str, initial_count: int, timeout: int = 240):
+    """
+    Poll Actions API until auto-remediation action count increases.
+    Returns the updated action list, or None on timeout.
+    """
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            r = httpx.get(
+                f"{ACTIONS_API}/actions",
+                params={"user": "auto-remediation", "entity_id": entity_id, "limit": 100},
+                timeout=10.0,
+            )
+            if r.status_code == 200 and len(r.json()) > initial_count:
+                return r.json()
+        except Exception:
+            pass
+        time.sleep(15)
+    return None
 ```
 
 **Files to create:**
@@ -384,20 +411,14 @@ class TestAutoRemediation:
         # 2. Kill worker pod to trigger CrashLoopBackOff
         execute_kubectl("delete pod -l app=worker -n calculator --grace-period=0 --force")
 
-        # 3. Wait for auto-remediation to execute
+        # 3. Wait for auto-remediation to execute (polling, not fixed sleep)
         #    (DHS detects → emits event → Actions consumes → rule matches → auto-action)
-        time.sleep(180)  # Allow full pipeline to execute
+        updated = wait_for_auto_action(self.ENTITY_ID, initial_count, timeout=240)
 
         # 4. Check that a new auto-remediation action was created
-        updated = httpx.get(
-            f"{ACTIONS_API}/actions",
-            params={"user": "auto-remediation", "entity_id": self.ENTITY_ID, "limit": 100},
-            timeout=10.0,
-        ).json()
-
-        assert len(updated) > initial_count, (
+        assert updated is not None, (
             f"Auto-remediation should have created a new action "
-            f"(was {initial_count}, now {len(updated)})"
+            f"(was {initial_count}, timed out waiting)"
         )
 
         # 5. Verify the auto-action has expected fields
@@ -455,6 +476,8 @@ jobs:
           pip install ruff
           ruff check apps/actions-api/ --select E,F,W
         continue-on-error: true
+      # NOTE: E2E tests (tests/e2e/) require SSH access to the k3s cluster
+      # and are NOT run in CI. Run them locally: pytest tests/e2e/ -v --timeout=300
 
   build-actions-api:
     needs: test

@@ -9,7 +9,7 @@
 
 ## Current State
 
-Sprint 1 complete. Actions API running at `:31000` with restart/scale actions, RBAC, and audit logging.
+Sprint 2 complete. Actions API v0.2.0 running at `:31000` with Kafka consumer, recommendations, and correlation.
 
 ---
 
@@ -25,7 +25,7 @@ Sprint 1  ✅ Actions Service Core + Audit DB
     │         Deploy to k3s, verify restart/scale work
     │
     ▼
-Sprint 2     Kafka Consumer + Recommendations
+Sprint 2  ✅ Kafka Consumer + Recommendations
     │         Consume health.transition.v1 events
     │         Store pending recommendations
     │         GET /recommendations endpoint

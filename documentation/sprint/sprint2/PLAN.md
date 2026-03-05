@@ -2,7 +2,7 @@
 
 **Goal:** Consume `health.transition.v1` events from Kafka, store pending recommendations in Postgres, expose them via `GET /recommendations`, and link actions to triggering health events via `correlation_id`.
 
-**Status:** Not Started
+**Status:** Complete
 **Depends on:** Sprint 1 complete, Team 5 Sprint 3 (health.transition.v1 events on Kafka) — ALREADY LIVE, Team 2 Kafka — ALREADY LIVE
 
 ---
@@ -42,7 +42,7 @@
 
 ### Milestone 1 — Add aiokafka dependency + Kafka config
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`apps/actions-api/requirements.txt`** — add:
 ```
@@ -68,7 +68,7 @@ KAFKA_CONSUMER_GROUP = os.getenv("KAFKA_CONSUMER_GROUP", "actions-consumer-group
 
 ### Milestone 2 — Recommendation model + DB table
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`apps/actions-api/models.py`** — add Recommendation model:
 ```python
@@ -119,7 +119,7 @@ class RecommendationResponse(BaseModel):
 
 ### Milestone 3 — Kafka consumer implementation
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`apps/actions-api/kafka_consumer.py`:**
 ```python
@@ -127,9 +127,11 @@ import asyncio
 import json
 import logging
 import uuid
+from collections import OrderedDict
 from datetime import datetime, timezone
 
 from aiokafka import AIOKafkaConsumer
+from prometheus_client import Counter
 from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy import func
@@ -140,16 +142,16 @@ from models import Recommendation
 
 logger = logging.getLogger(__name__)
 
-# Prometheus metrics (defined in main.py or metrics module)
-# RECOMMENDATIONS_TOTAL = Counter("actions_recommendations_total", "Health transition events stored as recommendations")
-# RECOMMENDATIONS_CLEARED = Counter("actions_recommendations_cleared_total", "Recommendations cleared on recovery")
+# Prometheus metrics
+RECOMMENDATIONS_TOTAL = Counter("actions_recommendations_total", "Health transition events stored as recommendations")
+RECOMMENDATIONS_CLEARED = Counter("actions_recommendations_cleared_total", "Recommendations cleared on recovery")
 
 
 class HealthTransitionConsumer:
     def __init__(self):
         self.consumer: AIOKafkaConsumer | None = None
         self._running = False
-        self._seen_event_ids: set[str] = set()  # Simple dedup (bounded)
+        self._seen_event_ids: OrderedDict[str, None] = OrderedDict()  # FIFO dedup (bounded)
         self._max_seen = 10000
 
     async def start(self):
@@ -200,9 +202,10 @@ class HealthTransitionConsumer:
         if event_id in self._seen_event_ids:
             logger.debug("Duplicate event_id=%s, skipping", event_id)
             return
-        self._seen_event_ids.add(event_id)
-        if len(self._seen_event_ids) > self._max_seen:
-            self._seen_event_ids = set(list(self._seen_event_ids)[-5000:])
+        self._seen_event_ids[event_id] = None
+        # Trim oldest entries when over limit (FIFO via OrderedDict)
+        while len(self._seen_event_ids) > self._max_seen:
+            self._seen_event_ids.popitem(last=False)  # Remove oldest
 
         entity_id = event["entity_id"]
         new_state = event["new_state"]
@@ -220,7 +223,7 @@ class HealthTransitionConsumer:
                 )
                 await session.commit()
                 logger.info("Cleared recommendation for %s (recovered)", entity_id)
-                # RECOMMENDATIONS_CLEARED.inc()
+                RECOMMENDATIONS_CLEARED.inc()
             else:
                 # Determine recommended action based on event
                 recommended_action = self._determine_recommended_action(event)
@@ -269,7 +272,7 @@ class HealthTransitionConsumer:
                     "Stored recommendation: entity=%s, action=%s",
                     entity_id, recommended_action,
                 )
-                # RECOMMENDATIONS_TOTAL.inc()
+                RECOMMENDATIONS_TOTAL.inc()
 
     def _determine_recommended_action(self, event: dict) -> str | None:
         """
@@ -312,7 +315,7 @@ class HealthTransitionConsumer:
 
 ### Milestone 4 — GET /recommendations endpoint
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`apps/actions-api/main.py`** — add recommendations endpoint and consumer lifecycle:
 ```python
@@ -375,7 +378,7 @@ async def list_recommendations(
 
 ### Milestone 5 — Correlation: link actions to health events
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 When `POST /actions` is called, auto-populate `correlation_id` from the current recommendation for that entity (if one exists). This links the action to the health event that triggered it.
 
@@ -422,7 +425,7 @@ async def execute_action(body: ActionRequest, db: AsyncSession = Depends(get_db)
 
 ### Milestone 6 — Deploy updated Actions API
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`k8s/actions-api/deployment.yaml`** — add Kafka env vars:
 ```yaml
@@ -471,7 +474,7 @@ ssh 5560 "sudo kubectl exec -n actions statefulset/postgres -- \
 
 ### Milestone 7 — Smoke test: recommendations + correlation
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 ```bash
 # 1. Verify Kafka consumer is connected:
@@ -520,7 +523,7 @@ curl -s http://192.168.1.210:31000/metrics | grep actions_recommendations
 
 ### Milestone 8 — Write E2E tests
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`tests/e2e/test_recommendations.py`:**
 ```python
@@ -606,7 +609,7 @@ pytest tests/e2e/test_recommendations.py -v
 
 ### Milestone 9 — Update docs + write sprint review
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 - Update `documentation/sprint/ROADMAP.md` — mark Sprint 2 as complete
 - Write `documentation/sprint/sprint2/REVIEW.md`
