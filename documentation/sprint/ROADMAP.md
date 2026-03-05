@@ -9,14 +9,14 @@
 
 ## Current State
 
-Nothing exists. Greenfield build.
+Sprint 1 complete. Actions API running at `:31000` with restart/scale actions, RBAC, and audit logging.
 
 ---
 
 ## Sprint Sequence
 
 ```
-Sprint 1     Actions Service Core + Audit DB
+Sprint 1  ✅ Actions Service Core + Audit DB
     │         actions namespace, Postgres for audit
     │         K8s client (restart, scale deployments)
     │         REST API: POST /actions, GET /actions
@@ -75,11 +75,11 @@ Sprint 5     Integration + Failure Validation
 
 | What Actions Needs | Team | Status |
 |--------------------|------|--------|
-| SSOT API with entities, ownership, health_summary | Team 4 Sprints 1+3 | Pending |
-| health.transition events on Kafka topic | Team 5 Sprint 3 | Pending |
-| Calculator services running for remediation targets | Team 2 | Running |
+| SSOT API with entities, ownership, health_summary | Team 4 Sprints 1+3 | Live |
+| health.transition events on Kafka topic | Team 5 Sprint 3 | Live |
+| Calculator services running for remediation targets | Team 2 | Live |
 | Prometheus scraping Actions metrics | Team 3 | Future |
-| DHS writing health states to SSOT | Team 5 Sprint 1 | Pending |
+| DHS writing health states to SSOT | Team 5 Sprint 1 | Live |
 
 ---
 

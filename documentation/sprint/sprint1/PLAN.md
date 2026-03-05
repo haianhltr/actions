@@ -2,7 +2,7 @@
 
 **Goal:** Stand up the Actions service from scratch. After this sprint, remediation actions (restart, scale) can be executed via a REST API, every action is recorded in an audit log, and basic RBAC checks ownership before allowing actions.
 
-**Status:** Not Started
+**Status:** Complete
 **Depends on:** Team 4 Sprint 1 (SSOT API with entities + ownership)
 
 ---
@@ -32,7 +32,7 @@
 
 ### Milestone 1 — Create actions namespace + Postgres
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`k8s/namespace.yaml`:**
 ```yaml
@@ -79,7 +79,7 @@ ssh 5560 "sudo kubectl exec -n actions statefulset/postgres -- pg_isready -U act
 
 ### Milestone 2 — Create Actions API project structure
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`apps/actions-api/requirements.txt`:**
 ```
@@ -155,7 +155,7 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
 
 ### Milestone 3 — Kubernetes client (restart + scale)
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`apps/actions-api/k8s_client.py`:**
 - Uses `kubernetes` Python client (in-cluster config)
@@ -211,7 +211,7 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
 
 ### Milestone 4 — SSOT client (ownership lookup)
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`apps/actions-api/ssot_client.py`:**
 - Async HTTP client using `httpx` to query SSOT API
@@ -232,7 +232,7 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
 
 ### Milestone 5 — RBAC enforcer
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`apps/actions-api/rbac.py`:**
 - `class RBACEnforcer`:
@@ -257,7 +257,7 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
 
 ### Milestone 6 — Actions API endpoints + main.py
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`apps/actions-api/main.py`:**
 
@@ -348,7 +348,7 @@ curl -s -X POST http://192.168.1.210:31000/actions \
 
 ### Milestone 7 — Deploy Actions API to k3s
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **K8s RBAC (create first — Actions needs K8s permissions):**
 
@@ -435,7 +435,7 @@ ssh 5560 "curl -s http://192.168.1.210:31000/metrics | head -10"
 
 ### Milestone 8 — Smoke test: restart + scale + audit
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 Run a comprehensive smoke test:
 
@@ -513,7 +513,7 @@ All tests must pass before proceeding.
 
 ### Milestone 9 — Update docs + write sprint review
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 - Update `documentation/sprint/ROADMAP.md` — mark Sprint 1 as complete
 - Write `documentation/sprint/sprint1/REVIEW.md`
