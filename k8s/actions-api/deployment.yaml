@@ -39,6 +39,12 @@ spec:
               value: "true"
             - name: MAX_SCALE_REPLICAS
               value: "10"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka.calculator.svc.cluster.local:9092"
+            - name: KAFKA_TOPIC
+              value: "health.transition.v1"
+            - name: KAFKA_CONSUMER_GROUP
+              value: "actions-consumer-group"
           readinessProbe:
             httpGet:
               path: /health

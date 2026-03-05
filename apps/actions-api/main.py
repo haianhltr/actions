@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 import uuid
@@ -13,9 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import engine, get_db
 from k8s_client import K8sClient
-from models import Action, Base
+from kafka_consumer import HealthTransitionConsumer
+from models import Action, Base, Recommendation
 from rbac import RBACEnforcer
-from schemas import ActionDetail, ActionRequest, ActionResponse
+from schemas import ActionDetail, ActionRequest, ActionResponse, RecommendationResponse
 import ssot_client
 
 # --- Logging ---
@@ -42,6 +44,7 @@ API_REQUEST_DURATION = Histogram(
 # --- Globals ---
 k8s_client: K8sClient | None = None
 rbac = RBACEnforcer()
+health_consumer = HealthTransitionConsumer()
 _start_time = time.time()
 
 
@@ -60,10 +63,24 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Failed to initialize K8s client — actions will fail")
 
+    # Start Kafka consumer
+    consumer_task = None
+    try:
+        await health_consumer.start()
+        consumer_task = asyncio.create_task(health_consumer.consume_loop())
+        logger.info("Kafka consumer background task started")
+    except Exception:
+        logger.exception("Failed to start Kafka consumer — continuing without it")
+
     yield
 
+    # Shutdown
+    await health_consumer.stop()
+    if consumer_task:
+        consumer_task.cancel()
 
-app = FastAPI(title="Actions API", version="0.1.0", lifespan=lifespan)
+
+app = FastAPI(title="Actions API", version="0.2.0", lifespan=lifespan)
 
 
 # --- Middleware: metrics ---
@@ -92,7 +109,7 @@ async def root(db: AsyncSession = Depends(get_db)):
     count = len(result.scalars().all())
     return {
         "service": "actions-api",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "status": "running",
         "uptime_seconds": round(time.time() - _start_time, 1),
         "action_count": count,
@@ -137,7 +154,21 @@ async def execute_action(
     if kind != "Deployment":
         raise HTTPException(status_code=400, detail="Only Deployment targets supported")
 
-    # 4. Execute action
+    # 4. Auto-populate correlation_id from current recommendation
+    correlation_id = body.correlation_id
+    if not correlation_id:
+        result = await db.execute(
+            select(Recommendation).where(Recommendation.entity_id == body.entity_id)
+        )
+        recommendation = result.scalar_one_or_none()
+        if recommendation:
+            correlation_id = recommendation.event_id
+            logger.info(
+                "Auto-populated correlation_id=%s from recommendation for entity=%s",
+                correlation_id, body.entity_id,
+            )
+
+    # 5. Execute action
     action_id = str(uuid.uuid4())
     status = "pending"
     result_message = None
@@ -171,7 +202,7 @@ async def execute_action(
         ACTIONS_EXECUTED.labels(action_type=body.action_type, status=status).inc()
         ACTIONS_EXECUTION_DURATION.labels(action_type=body.action_type).observe(duration)
 
-    # 5. Record in audit DB
+    # 6. Record in audit DB
     action = Action(
         id=action_id,
         entity_id=body.entity_id,
@@ -185,15 +216,15 @@ async def execute_action(
         reason=body.reason,
         status=status,
         result_message=result_message,
-        correlation_id=None,
+        correlation_id=correlation_id,
         completed_at=completed_at,
     )
     db.add(action)
     await db.commit()
 
     logger.info(
-        "Action executed: id=%s type=%s entity=%s user=%s status=%s",
-        action_id, body.action_type, body.entity_id, body.user, status,
+        "Action executed: id=%s type=%s entity=%s user=%s status=%s correlation=%s",
+        action_id, body.action_type, body.entity_id, body.user, status, correlation_id,
     )
 
     return ActionResponse(
@@ -202,6 +233,29 @@ async def execute_action(
         result_message=result_message,
         completed_at=completed_at,
     )
+
+
+@app.get("/recommendations", response_model=list[RecommendationResponse])
+async def list_recommendations(
+    entity_id: str | None = None,
+    health_state: str | None = None,
+    entity_type: str | None = None,
+    owner_team: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(Recommendation)
+    if entity_id:
+        query = query.where(Recommendation.entity_id == entity_id)
+    if health_state:
+        query = query.where(Recommendation.health_state == health_state)
+    if entity_type:
+        query = query.where(Recommendation.entity_type == entity_type)
+    if owner_team:
+        query = query.where(Recommendation.owner_team == owner_team)
+    query = query.order_by(Recommendation.updated_at.desc())
+
+    result = await db.execute(query)
+    return result.scalars().all()
 
 
 @app.get("/actions", response_model=list[ActionDetail])

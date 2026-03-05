@@ -9,6 +9,7 @@ class ActionRequest(BaseModel):
     user: str
     reason: str | None = None
     parameters: dict = {}
+    correlation_id: str | None = None
 
 
 class ActionResponse(BaseModel):
@@ -34,5 +35,21 @@ class ActionDetail(BaseModel):
     correlation_id: str | None = None
     created_at: datetime
     completed_at: datetime | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RecommendationResponse(BaseModel):
+    entity_id: str
+    entity_name: str
+    entity_type: str
+    health_state: str
+    reason: str | None = None
+    root_cause_entity_id: str | None = None
+    root_cause_entity_name: str | None = None
+    recommended_action: str
+    owner_team: str | None = None
+    tier: str | None = None
+    since: datetime
 
     model_config = ConfigDict(from_attributes=True)
