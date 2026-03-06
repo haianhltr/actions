@@ -2,7 +2,7 @@
 
 **Goal:** Enforce full RBAC from `config/rbac.yaml` (fail-closed), implement auto-remediation that matches health events against `config/auto-remediation.yaml` rules, and add guardrails (rate limiting, cooldown, escalation) to prevent runaway automation.
 
-**Status:** Not Started
+**Status:** Complete
 **Depends on:** Sprints 1-3 complete
 
 ---
@@ -46,7 +46,7 @@
 
 ### Milestone 1 — Refactor RBAC to load from config/rbac.yaml (fail-closed)
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 Replace the Sprint 1 RBAC stub with a full config-driven enforcer that loads team mappings and roles from `config/rbac.yaml`.
 
@@ -190,7 +190,7 @@ pyyaml==6.0.2
 
 ### Milestone 2 — Mount config files via ConfigMap
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 Mount `config/rbac.yaml` and `config/auto-remediation.yaml` into the Actions API pod via a Kubernetes ConfigMap. This allows config changes without rebuilding the Docker image.
 
@@ -300,7 +300,7 @@ ssh 5560 "sudo kubectl exec deploy/actions-api -n actions -- cat /app/config/aut
 
 ### Milestone 3 — Auto-remediation engine
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`apps/actions-api/auto_remediation.py`:**
 ```python
@@ -438,7 +438,7 @@ class AutoRemediationEngine:
 
 ### Milestone 4 — Guardrails (rate limiting, cooldown, escalation)
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`apps/actions-api/guardrails.py`:**
 ```python
@@ -560,7 +560,7 @@ class Guardrails:
 
 ### Milestone 5 — Wire auto-remediation into Kafka consumer
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 Modify the Kafka consumer to check auto-remediation rules after storing a recommendation. The auto-remediation path executes actions through the normal action pipeline (K8s client + audit DB).
 
@@ -704,7 +704,7 @@ health_consumer = HealthTransitionConsumer(
 
 ### Milestone 6 — Optional Phase 2 actions: rollback + pause
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 Add `rollback_deployment` and `pause_rollout` actions. These are simple K8s patch operations. Include if straightforward; defer if edge cases arise.
 
@@ -785,7 +785,7 @@ Alternatively, skip `rollback_deployment` entirely (it's optional/Phase 2) and o
 
 ### Milestone 7 — Deploy and smoke test
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 ```bash
 # 1. Apply ConfigMap
@@ -867,7 +867,7 @@ curl -s http://192.168.1.210:31000/metrics | grep -E "auto_remediation|rbac_deni
 
 ### Milestone 8 — Write E2E tests
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 **`tests/e2e/test_auto_remediation.py`:**
 ```python
@@ -972,7 +972,7 @@ pytest tests/e2e/test_auto_remediation.py -v
 
 ### Milestone 9 — Update docs + write sprint review
 
-**Status:** [ ] Not Started
+**Status:** [x] Done
 
 - Update `documentation/sprint/ROADMAP.md` — mark Sprint 4 as complete
 - Write `documentation/sprint/sprint4/REVIEW.md`

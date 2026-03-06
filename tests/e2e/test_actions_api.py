@@ -40,7 +40,7 @@ class TestRestartAction:
             json={
                 "entity_id": "k8s:lab:calculator:Deployment:api",
                 "action_type": "restart_deployment",
-                "user": "pytest@team.com",
+                "user": "engineer@team.com",
                 "reason": "E2E test restart",
                 "parameters": {},
             },
@@ -67,7 +67,7 @@ class TestScaleAction:
             json={
                 "entity_id": "k8s:lab:calculator:Deployment:api",
                 "action_type": "scale_deployment",
-                "user": "pytest@team.com",
+                "user": "engineer@team.com",
                 "reason": "E2E test scale up",
                 "parameters": {"replicas": 2},
             },
@@ -83,7 +83,7 @@ class TestScaleAction:
             json={
                 "entity_id": "k8s:lab:calculator:Deployment:api",
                 "action_type": "scale_deployment",
-                "user": "pytest@team.com",
+                "user": "engineer@team.com",
                 "reason": "E2E test scale back",
                 "parameters": {"replicas": 1},
             },

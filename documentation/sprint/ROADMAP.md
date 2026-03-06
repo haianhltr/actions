@@ -9,7 +9,7 @@
 
 ## Current State
 
-Sprint 3 complete. Ops UI v0.1.0 running at `:31080` with health overview, entity detail, action buttons, and Nginx reverse proxy.
+Sprint 4 complete. Full RBAC from config, auto-remediation engine with guardrails, pause/resume rollout actions.
 
 ---
 
@@ -40,7 +40,7 @@ Sprint 3  ✅ Ops UI (Health Overview + Actions)
     │         Static files served via Nginx
     │
     ▼
-Sprint 4     RBAC + Guardrails + Auto-Remediation
+Sprint 4  ✅ RBAC + Guardrails + Auto-Remediation
     │         Full RBAC from config/rbac.yaml
     │         Tier-based restrictions
     │         Auto-remediation config (safe auto-restart)
